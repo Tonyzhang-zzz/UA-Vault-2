@@ -1,4 +1,6 @@
 streamlit
 pandas
-altair
+openai
 openpyxl
+altair
+tabulate
