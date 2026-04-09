@@ -222,6 +222,7 @@ def show_table(df):
     html = display_df.to_html(index=False, classes='pdf-table', border=0, justify='left')
     st.markdown(html, unsafe_allow_html=True)
 
+# 💡 终极修复：强制排序(Order)和锁定归属(Detail)，彻底解决文字和色块移花接木的错位问题
 def draw_pie_chart_with_labels(df, category_col, value_col="安装量"):
     if df.empty or value_col not in df.columns or category_col not in df.columns: return None
     pie_data = df.groupby(category_col, as_index=False)[value_col].sum()
@@ -232,14 +233,22 @@ def draw_pie_chart_with_labels(df, category_col, value_col="安装量"):
     pie_data['percent'] = pie_data[value_col] / total
     pie_data['percent_label'] = pie_data['percent'].apply(lambda x: f"{x:.1%}" if x > 0.03 else "")
 
-    base = alt.Chart(pie_data).encode(theta=alt.Theta(f"{value_col}:Q", stack=True))
+    base = alt.Chart(pie_data).encode(
+        theta=alt.Theta(f"{value_col}:Q", stack=True),
+        order=alt.Order(f"{category_col}:N", sort='ascending')
+    )
+    
     pie = base.mark_arc(outerRadius=150, innerRadius=60).encode(
         color=alt.Color(f"{category_col}:N", legend=alt.Legend(title=category_col, orient='right')),
         tooltip=[category_col, value_col, alt.Tooltip('percent:Q', format='.1%', title='占比')]
     )
-    text = base.mark_text(radius=100, size=16, color='white', fontStyle='bold', align='center', baseline='middle').encode(
-        text='percent_label:N'
+    
+    text = base.mark_text(radius=100, size=16, fontStyle='bold', align='center', baseline='middle').encode(
+        text='percent_label:N',
+        color=alt.value('white'), 
+        detail=alt.Detail(f"{category_col}:N")
     )
+    
     return (pie + text).properties(height=350)
 
 def draw_dual_axis_chart(chart_data):
