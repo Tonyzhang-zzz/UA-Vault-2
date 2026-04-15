@@ -439,19 +439,60 @@ if fb_day_file and dt_day_file:
                     st.session_state[key_aud] = get_ai_insight(df_audience_feed, f"{adset}的受众画像(年龄和性别)")
             st.text_area(f"✍️ 【{adset}】受众画像洞察：", key=key_aud, height=130)
 
-        # 3. 版位表现 (新起一页)
+        # 3. 版位表现 (新起一页) - 🔥 新增了平台层级汇总 & 双表格合计栏
         if not fb_placement.empty:
             adset_placement = fb_placement[fb_placement['广告组'] == adset]
             if not adset_placement.empty:
-                render_module_header(f"🔹 广告组：【{adset}】 - 📱 各版位效率表现")
-                df_placement_show = format_custom_table(adset_placement, ['平台', '版位'], PLACEMENT_METRICS)
+                render_module_header(f"🔹 广告组：【{adset}】 - 📱 平台与版位效率表现")
+                
+                # 定义需要累加的基础量级指标
+                agg_placement_cols = [c for c in ['花费', '展示量', '点击量', '安装量'] if c in adset_placement.columns]
+                
+                # ================= 1. 平台层级数据汇总 =================
+                st.markdown("##### 🌍 平台层级汇总 (FB, IG, Audience Network 等)")
+                platform_summary = adset_placement.groupby('平台', as_index=False)[agg_placement_cols].sum()
+                
+                # 构造平台层级的合计行
+                total_platform = {'平台': '🔥 合计 (Total)'}
+                for col in agg_placement_cols: total_platform[col] = platform_summary[col].sum()
+                platform_summary = pd.concat([platform_summary, pd.DataFrame([total_platform])], ignore_index=True)
+                
+                # 格式化并重新计算率值
+                df_platform_show = format_custom_table(platform_summary, ['平台'], PLACEMENT_METRICS)
+                
+                # 排序魔法：把普通行按花费降序排列，把“合计行”单独抽出来强行贴在最末尾
+                df_plat_body = df_platform_show[df_platform_show['平台'] != '🔥 合计 (Total)'].sort_values(by='花费', ascending=False)
+                df_plat_total = df_platform_show[df_platform_show['平台'] == '🔥 合计 (Total)']
+                df_platform_show = pd.concat([df_plat_body, df_plat_total], ignore_index=True)
+                
+                show_table(df_platform_show)
+                
+                # ================= 2. 详细版位拆解 =================
+                st.markdown("##### 📍 详细版位拆解 (Placement Detail)")
+                placement_summary = adset_placement.groupby(['平台', '版位'], as_index=False)[agg_placement_cols].sum()
+                
+                # 构造版位层级的合计行
+                total_placement = {'平台': '🔥 合计 (Total)', '版位': '-'}
+                for col in agg_placement_cols: total_placement[col] = placement_summary[col].sum()
+                placement_summary = pd.concat([placement_summary, pd.DataFrame([total_placement])], ignore_index=True)
+                
+                # 格式化并重新计算率值
+                df_placement_show = format_custom_table(placement_summary, ['平台', '版位'], PLACEMENT_METRICS)
+                
+                # 排序魔法：普通版位按花费降序，合计行锁定在最底端
+                df_place_body = df_placement_show[df_placement_show['平台'] != '🔥 合计 (Total)'].sort_values(by='花费', ascending=False)
+                df_place_total = df_placement_show[df_placement_show['平台'] == '🔥 合计 (Total)']
+                df_placement_show = pd.concat([df_place_body, df_place_total], ignore_index=True)
+                
                 show_table(df_placement_show)
                 
+                # ================= 3. AI 洞察 =================
                 key_pla = f"input_pla_{adset}"
                 if key_pla not in st.session_state: st.session_state[key_pla] = ""
                 if is_trigger_ai:
                     with st.spinner(f"🤖 AI 正在诊断【{adset}】版位效率..."):
-                        st.session_state[key_pla] = get_ai_insight(df_placement_show.sort_values(by='花费', ascending=False).head(5), f"{adset}的花费Top5版位表现")
+                        # AI 会连着合计行一起看，从而更聪明地判断哪些版位拖了后腿，哪些跑赢了均值
+                        st.session_state[key_pla] = get_ai_insight(df_placement_show.head(9), f"{adset}的花费Top版位表现(含大盘均值Total作对比)")
                 st.text_area(f"✍️ 【{adset}】版位表现洞察：", key=key_pla, height=130)
 
         # 4. 素材数据 (新起一页)
